@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2D6E5F" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Vacances Sud France 2026</title>
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%232D6E5F' rx='15'/><text x='50' y='65' font-size='55' text-anchor='middle'>%F0%9F%8C%8A</text></svg>" />
+
+  <!-- Tailwind Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 + ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone pour JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* CSS Variables pour les 3 thèmes */
+    :root, [data-theme="light"] {
+      --bg: #fdfaf5;
+      --bg-soft: #ffffff;
+      --bg-hover: #f5f1ea;
+      --text: #1f1f1f;
+      --text-soft: #888888;
+      --text-muted: #b0b0b0;
+      --border: #e8e6e1;
+      --border-soft: #f0ede8;
+      --accent: #2D6E5F;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="dark"] {
+      --bg: #0a0a0a;
+      --bg-soft: #161616;
+      --bg-hover: #1f1f1f;
+      --text: #f5f5f5;
+      --text-soft: #a0a0a0;
+      --text-muted: #606060;
+      --border: #2a2a2a;
+      --border-soft: #1c1c1c;
+      --accent: #4ade80;
+      --shadow: rgba(0, 0, 0, 0.5);
+    }
+    [data-theme="sun"] {
+      --bg: #ffffff;
+      --bg-soft: #ffffff;
+      --bg-hover: #f0f0f0;
+      --text: #000000;
+      --text-soft: #1f1f1f;
+      --text-muted: #444444;
+      --border: #000000;
+      --border-soft: #555555;
+      --accent: #000000;
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+    [data-theme="sun"] body { font-weight: 600; }
+    [data-theme="sun"] .activities { font-weight: 600 !important; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background 200ms ease, color 200ms ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Animation flash quand l'autre modifie la carte */
+    @keyframes flash-sync {
+      0% { box-shadow: 0 0 0 0 var(--accent); }
+      40% { box-shadow: 0 0 0 6px var(--accent); }
+      100% { box-shadow: 0 0 0 0 transparent; }
+    }
+    .flash-sync {
+      animation: flash-sync 1.5s ease-out;
+    }
+
+    /* Animation today indicator */
+    @keyframes today-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+      50% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+    }
+    .today-card {
+      animation: today-pulse 2.5s ease-out infinite;
+      border: 2px solid #4ade80 !important;
+    }
+
+    /* Day past = grisé */
+    .day-past { opacity: 0.4; filter: grayscale(0.4); }
+
+    /* Carrousel photos : indicateurs dots */
+    .carousel-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transition: all 200ms;
+    }
+    .carousel-dot.active { background: white; width: 18px; border-radius: 3px; }
+
+    /* Status badge */
+    .status-pulse-pending { background: #f97316; }
+    .status-pulse-validated { background: #10b981; }
+
+    /* Scrollbar Webkit */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* Inputs : utiliser les variables thème */
+    input, textarea {
+      background: var(--bg-soft);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+    /* Loader initial */
+    .initial-loader {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+      z-index: 9999;
+    }
+    .initial-loader-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* No-tap highlight on mobile */
+    button, [role="button"] { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body>
+  <div class="initial-loader" id="initial-loader">
+    <div class="initial-loader-spinner"></div>
+  </div>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const SUPABASE_URL = 'https://zubssmvhaxraxdjwhcje.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_EfV26KCNGB-JOJxZgOJKIw_RLZdk_mk';
+    const TABLE = 'vacation_planning_2026';
+    const BUCKET_PHOTOS = 'vacation-photos';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      realtime: { params: { eventsPerSecond: 10 } },
+    });
+
+    // ============================================================
+    // CONSTANTS
+    // ============================================================
+    const ROWS = [
+      {
+        id: 'row1',
+        label: 'Provence + Marseille',
+        dates: ['2026-05-12','2026-05-13','2026-05-14','2026-05-15','2026-05-16','2026-05-17'],
+        accent: '#7A8B3C',
+      },
+      {
+        id: 'row2',
+        label: "Var + Côte d'Azur",
+        dates: ['2026-05-18','2026-05-19','2026-05-20','2026-05-21','2026-05-22','2026-05-23'],
+        accent: '#1A8FA8',
+      },
+      {
+        id: 'row3',
+        label: 'Riviera + Verdon + Retour',
+        dates: ['2026-05-24','2026-05-25','2026-05-26','2026-05-27','2026-05-28','2026-05-29','2026-05-30','2026-05-31'],
+        accent: '#D9743A',
+      },
+    ];
+
+    const COLORS_PALETTE = [
+      { name: 'Lavande',   color: '#7C5BAB' },
+      { name: 'Olive',     color: '#7A8B3C' },
+      { name: 'Mistral',   color: '#3B8AC4' },
+      { name: 'Soleil',    color: '#F5B82E' },
+      { name: 'Coquelicot',color: '#E63946' },
+      { name: 'Mer',       color: '#1A8FA8' },
+      { name: 'Ocre',      color: '#D9743A' },
+      { name: 'Rosé',      color: '#E07A8B' },
+      { name: 'Pin',       color: '#2D6E5F' },
+      { name: 'Sienne',    color: '#A04A2C' },
+    ];
+
+    const THEMES = ['light', 'dark', 'sun'];
+    const THEME_LABELS = { light: '🌞', dark: '🌙', sun: '☀️' };
+    const THEME_NAMES = { light: 'Standard', dark: 'Dark', sun: 'Soleil' };
+
+    const VOYAGE_START = '2026-05-12';
+    const VOYAGE_END   = '2026-05-31';
+    const ALL_DATES = ROWS.flatMap(r => r.dates);
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    function formatDate(dateStr) {
+      const d = new Date(dateStr + 'T00:00:00Z');
+      const days = ['DIM','LUN','MAR','MER','JEU','VEN','SAM'];
+      return { dayName: days[d.getUTCDay()], dayNumber: d.getUTCDate() };
+    }
+
+    function todayISO() {
+      const now = new Date();
+      const tz = -now.getTimezoneOffset() * 60000;
+      return new Date(now - tz + 0).toISOString().slice(0, 10);
+    }
+
+    function diffDays(fromISO, toISO) {
+      const from = new Date(fromISO + 'T00:00:00Z');
+      const to = new Date(toISO + 'T00:00:00Z');
+      return Math.round((to - from) / 86400000);
+    }
+
+    function timeAgo(timestampISO) {
+      if (!timestampISO) return '';
+      const diff = Date.now() - new Date(timestampISO).getTime();
+      const min = Math.floor(diff / 60000);
+      if (min < 1) return "à l'instant";
+      if (min < 60) return `il y a ${min} min`;
+      const h = Math.floor(min / 60);
+      if (h < 24) return `il y a ${h} h`;
+      const d = Math.floor(h / 24);
+      return `il y a ${d} j`;
+    }
+
+    function getCounter() {
+      const today = todayISO();
+      if (today < VOYAGE_START) {
+        const days = diffDays(today, VOYAGE_START);
+        return { label: `J-${days} avant départ`, mode: 'before' };
+      }
+      if (today > VOYAGE_END) {
+        return { label: 'Vacances terminées', mode: 'after' };
+      }
+      const dayN = diffDays(VOYAGE_START, today) + 1;
+      return { label: `Jour ${dayN}/20`, mode: 'during' };
+    }
+
+    // Compression image client-side avant upload
+    async function compressImage(file, maxWidth = 1920, quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => blob ? resolve(blob) : reject(new Error('Compression échouée')),
+              'image/jpeg',
+              quality
+            );
+          };
+          img.onerror = () => reject(new Error('Image invalide'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Lecture fichier échouée'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ============================================================
+    // MAIN APP
+    // ============================================================
+    function App() {
+      const [days, setDays] = useState({});       // { '2026-05-12': { ...data, _updated_at } }
+      const [loading, setLoading] = useState(true);
+      const [editingDate, setEditingDate] = useState(null);
+      const [theme, setTheme] = useState(() => localStorage.getItem('vacation-theme') || 'light');
+      const [online, setOnline] = useState(navigator.onLine);
+      const [recentlyChanged, setRecentlyChanged] = useState(new Set());
+      const todayCardRef = useRef(null);
+
+      // Apply theme to <html>
+      useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('vacation-theme', theme);
+      }, [theme]);
+
+      // Online / offline
+      useEffect(() => {
+        const onOnline = () => setOnline(true);
+        const onOffline = () => setOnline(false);
+        window.addEventListener('online', onOnline);
+        window.addEventListener('offline', onOffline);
+        return () => {
+          window.removeEventListener('online', onOnline);
+          window.removeEventListener('offline', onOffline);
+        };
+      }, []);
+
+      // Initial load + Realtime subscription
+      useEffect(() => {
+        async function load() {
+          const { data, error } = await supabase
+            .from(TABLE)
+            .select('date, data, updated_at');
+          if (error) {
+            console.error('Load error:', error);
+            setLoading(false);
+            return;
+          }
+          const map = {};
+          (data || []).forEach(row => {
+            map[row.date] = { ...row.data, _updated_at: row.updated_at };
+          });
+          setDays(map);
+          setLoading(false);
+          // Hide initial loader
+          const loader = document.getElementById('initial-loader');
+          if (loader) loader.style.display = 'none';
+        }
+        load();
+
+        const channel = supabase
+          .channel('vacation-changes')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: TABLE,
+          }, (payload) => {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const row = payload.new;
+              setDays(prev => ({
+                ...prev,
+                [row.date]: { ...row.data, _updated_at: row.updated_at },
+              }));
+              // Animation flash
+              setRecentlyChanged(prev => new Set(prev).add(row.date));
+              setTimeout(() => {
+                setRecentlyChanged(prev => {
+                  const next = new Set(prev);
+                  next.delete(row.date);
+                  return next;
+                });
+              }, 1600);
+            }
+          })
+          .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+      }, []);
+
+      // Auto-scroll to today on mount
+      useEffect(() => {
+        if (loading) return;
+        const today = todayISO();
+        if (today >= VOYAGE_START && today <= VOYAGE_END) {
+          setTimeout(() => {
+            if (todayCardRef.current) {
+              todayCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 400);
+        }
+      }, [loading]);
+
+      // Cycle theme
+      function cycleTheme() {
+        const idx = THEMES.indexOf(theme);
+        setTheme(THEMES[(idx + 1) % THEMES.length]);
+      }
+
+      // Save day data to Supabase (UPSERT)
+      async function saveDayData(date, newData) {
+        // Optimistic update
+        setDays(prev => ({ ...prev, [date]: { ...newData, _updated_at: new Date().toISOString() } }));
+        const { _updated_at, ...cleanData } = newData;
+        const { error } = await supabase
+          .from(TABLE)
+          .upsert({ date, data: cleanData });
+        if (error) {
+          console.error('Save error:', error);
+          alert('Erreur de sauvegarde : ' + error.message);
+        }
+      }
+
+      // Quick toggle status (sans ouvrir modal)
+      async function toggleStatus(date) {
+        const day = days[date];
+        if (!day) return;
+        const newStatus = day.status === 'validated' ? 'pending' : 'validated';
+        await saveDayData(date, { ...day, status: newStatus });
+      }
+
+      const counter = useMemo(() => getCounter(), []);
+      const today = todayISO();
+
+      if (loading) {
+        return null; // initial loader visible
+      }
+
+      return (
+        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] pb-12">
+          <Header
+            theme={theme}
+            cycleTheme={cycleTheme}
+            online={online}
+            counter={counter}
+          />
+
+          {/* 3 lignes */}
+          <div className="max-w-[1500px] mx-auto px-3 md:px-6 space-y-6">
+            {ROWS.map(row => (
+              <RowSection
+                key={row.id}
+                row={row}
+                days={days}
+                today={today}
+                todayCardRef={todayCardRef}
+                recentlyChanged={recentlyChanged}
+                onEdit={setEditingDate}
+                onToggleStatus={toggleStatus}
+              />
+            ))}
+          </div>
+
+          {/* Modal édition */}
+          {editingDate && days[editingDate] && (
+            <EditModal
+              date={editingDate}
+              dayData={days[editingDate]}
+              onClose={() => setEditingDate(null)}
+              onSave={(newData) => {
+                saveDayData(editingDate, newData);
+                setEditingDate(null);
+              }}
+            />
+          )}
+
+          {/* Footer info */}
+          <div className="max-w-[1500px] mx-auto px-3 md:px-6 mt-8 text-[10px] text-[var(--text-muted)] text-center">
+            Sync temps réel • Mode hors ligne actif • {Object.keys(days).length} jours chargés
+          </div>
+        </div>
+      );
+    }
+
+    // ============================================================
+    // HEADER
+    // ============================================================
+    function Header({ theme, cycleTheme, online, counter }) {
+      return (
+        <div className="sticky top-0 z-30 bg-[var(--bg)]/95 backdrop-blur border-b border-[var(--border-soft)]">
+          <div className="max-w-[1500px] mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg md:text-xl font-semibold tracking-tight truncate">
+                  Vacances Sud France
+                </h1>
+                <span className="text-[10px] md:text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{
+                    backgroundColor: counter.mode === 'during' ? '#10b981' : counter.mode === 'after' ? '#94a3b8' : '#f97316',
+                    color: 'white',
+                  }}>
+                  {counter.label}
+                </span>
+              </div>
+              <p className="text-[10px] md:text-xs text-[var(--text-soft)] mt-0.5">
+                12 → 31 mai 2026 · Thomas & Aneta
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[10px] md:text-xs flex items-center gap-1"
+                style={{ color: online ? '#10b981' : '#ef4444' }}
+                title={online ? 'En ligne' : 'Hors ligne — modifs en attente de sync'}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'currentColor' }} />
+                {online ? 'En ligne' : 'Hors ligne'}
+              </span>
+
+              <button
+                onClick={cycleTheme}
+                className="px-2.5 py-1.5 rounded-md border border-[var(--border)] text-xs hover:bg-[var(--bg-hover)] flex items-center gap-1.5"
+                title={`Thème : ${THEME_NAMES[theme]} (cycle)`}
+              >
+                <span className="text-base leading-none">{THEME_LABELS[theme]}</span>
+                <span className="hidden md:inline">{THEME_NAMES[theme]}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ============================================================
+    // ROW SECTION
+    // ============================================================
+    function RowSection({ row, days, today, todayCardRef, recentlyChanged, onEdit, onToggleStatus }) {
+      return (
+        <div>
+          <div
+            className="inline-flex items-center gap-2 mb-2 px-2.5 py-1 rounded text-white text-[10px] font-semibold tracking-wider uppercase"
+            style={{ backgroundColor: row.accent }}
+          >
+            <span>{row.label}</span>
+            <span className="opacity-70 font-normal normal-case">· {row.dates.length}j</span>
+          </div>
+
+          {/* Grid responsive : 1 col mobile, 2 cols sm, 3 cols md, 6/8 cols lg+ */}
+          <div className="grid gap-2 md:gap-1.5"
+            style={{
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))',
+            }}>
+            {row.dates.map(dateStr => {
+              const day = days[dateStr];
+              if (!day) return null;
+              const di = formatDate(dateStr);
+              const isToday = dateStr === today;
+              const isPast = dateStr < today;
+              const isFlash = recentlyChanged.has(dateStr);
+              return (
+                <DayCard
+                  key={dateStr}
+                  ref={isToday ? todayCardRef : null}
+                  day={day}
+                  dateInfo={di}
+                  dateStr={dateStr}
+                  isToday={isToday}
+                  isPast={isPast}
+                  isFlash={isFlash}
+                  onClick={() => onEdit(dateStr)}
+                  onToggleStatus={() => onToggleStatus(dateStr)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // ============================================================
+    // DAY CARD (avec carrousel photos + statut quick-toggle)
+    // ============================================================
+    const DayCard = React.forwardRef(function DayCardInner(
+      { day, dateInfo, dateStr, isToday, isPast, isFlash, onClick, onToggleStatus }, ref
+    ) {
+      const photos = Array.isArray(day.headerImages) ? day.headerImages : [];
+      const hasPhotos = photos.length > 0;
+      const [photoIdx, setPhotoIdx] = useState(0);
+      const touchStartX = useRef(null);
+      const touchEndX = useRef(null);
+
+      // Reset index si nb photos change
+      useEffect(() => {
+        if (photoIdx >= photos.length) setPhotoIdx(0);
+      }, [photos.length, photoIdx]);
+
+      const currentPhoto = hasPhotos ? photos[photoIdx] : null;
+      const headerStyle = currentPhoto
+        ? {
+            backgroundImage: `url(${currentPhoto})`,
+            backgroundSize: `${(day.imageZoom || 1) * 100}%`,
+            backgroundPosition: `center ${day.imageOffsetY || 50}%`,
+            backgroundRepeat: 'no-repeat',
+          }
+        : { backgroundColor: day.headerColor || '#888' };
+
+      function onTouchStart(e) { touchStartX.current = e.targetTouches[0].clientX; }
+      function onTouchMove(e) { touchEndX.current = e.targetTouches[0].clientX; }
+      function onTouchEnd() {
+        if (touchStartX.current == null || touchEndX.current == null) return;
+        const diff = touchStartX.current - touchEndX.current;
+        if (Math.abs(diff) < 40) return;
+        if (diff > 0 && photoIdx < photos.length - 1) setPhotoIdx(photoIdx + 1);
+        else if (diff < 0 && photoIdx > 0) setPhotoIdx(photoIdx - 1);
+        touchStartX.current = null;
+        touchEndX.current = null;
+      }
+
+      const status = day.status || 'pending';
+      const statusColor = status === 'validated' ? '#10b981' : '#f97316';
+      const statusEmoji = status === 'validated' ? '🟢' : '🟠';
+
+      return (
+        <div
+          ref={ref}
+          onClick={onClick}
+          className={[
+            'rounded-md overflow-hidden flex flex-col cursor-pointer transition-shadow',
+            'bg-[var(--bg-soft)] border border-[var(--border)]',
+            'hover:shadow-md',
+            isPast && !isToday ? 'day-past' : '',
+            isToday ? 'today-card' : '',
+            isFlash ? 'flash-sync' : '',
+          ].join(' ')}
+        >
+          {/* Top : ville + headline + statut puce */}
+          <div className="px-2 pt-1.5 pb-1 flex items-start justify-between gap-1">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] md:text-[10.5px] font-semibold truncate">
+                {day.cityEmoji} {day.city}
+              </div>
+              <div className="text-[10px] md:text-[9.5px] text-[var(--text-soft)] truncate italic">
+                {day.headline || ''}
+              </div>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleStatus(); }}
+              className="flex-shrink-0 w-3 h-3 mt-0.5 rounded-full"
+              style={{ backgroundColor: statusColor }}
+              title={status === 'validated' ? 'Validé · tap pour repasser à trancher' : 'À trancher · tap pour valider'}
+            />
+          </div>
+
+          {/* Header date avec carrousel photos OR couleur */}
+          <div
+            className="relative px-2.5 py-2 text-white select-none"
+            style={headerStyle}
+            onTouchStart={hasPhotos && photos.length > 1 ? onTouchStart : undefined}
+            onTouchMove={hasPhotos && photos.length > 1 ? onTouchMove : undefined}
+            onTouchEnd={hasPhotos && photos.length > 1 ? onTouchEnd : undefined}
+          >
+            {hasPhotos && <div className="absolute inset-0 bg-black/30" />}
+            <div className="relative">
+              <div className="text-[9px] font-semibold tracking-widest opacity-90">
+                {dateInfo.dayName}
+              </div>
+              <div className="text-[24px] md:text-[22px] font-bold leading-none">
+                {dateInfo.dayNumber}
+              </div>
+              <div className="text-[9px] opacity-90 mt-0.5">mai</div>
+            </div>
+
+            {/* Dots indicateur photos */}
+            {hasPhotos && photos.length > 1 && (
+              <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-1 pointer-events-none">
+                {photos.map((_, i) => (
+                  <span
+                    key={i}
+                    className={'carousel-dot ' + (i === photoIdx ? 'active' : '')}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sleep */}
+          <div className="px-2 py-1 text-[10px] md:text-[9.5px] text-[var(--text-soft)] bg-[var(--bg-hover)] border-b border-[var(--border-soft)] truncate">
+            🛏️ {day.sleep || '—'}
+          </div>
+
+          {/* Activities */}
+          <div className="px-2 py-1.5 text-[10px] md:text-[9.5px] flex-1 whitespace-pre-line leading-snug min-h-[70px] activities">
+            {day.activities || <span className="text-[var(--text-muted)] italic">+ ajouter</span>}
+          </div>
+
+          {/* Updated_at footer */}
+          {day._updated_at && (
+            <div className="px-2 pb-1 text-[9px] text-[var(--text-muted)] text-right italic">
+              {timeAgo(day._updated_at)}
+            </div>
+          )}
+        </div>
+      );
+    });
+
+    // ============================================================
+    // EDIT MODAL
+    // ============================================================
+    function EditModal({ date, dayData, onClose, onSave }) {
+      const [draft, setDraft] = useState(() => ({
+        ...dayData,
+        headerImages: Array.isArray(dayData.headerImages) ? [...dayData.headerImages] : [],
+      }));
+      const [dirty, setDirty] = useState(false);
+      const [uploading, setUploading] = useState(false);
+      const fileInputRef = useRef(null);
+
+      function patch(updates) {
+        setDraft(prev => ({ ...prev, ...updates }));
+        setDirty(true);
+      }
+
+      function handleClose() {
+        if (dirty) {
+          if (!window.confirm('Modifications non sauvegardées. Quitter quand même ?')) return;
+        }
+        onClose();
+      }
+
+      async function handleImageUpload(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+          let toUpload = file;
+          // Compresser si > 1 MB ou si très large
+          if (file.size > 1024 * 1024) {
+            toUpload = await compressImage(file, 1920, 0.85);
+          }
+          const ext = 'jpg';
+          const filename = `${date}-${Date.now()}.${ext}`;
+          const { data, error } = await supabase.storage
+            .from(BUCKET_PHOTOS)
+            .upload(filename, toUpload, { contentType: 'image/jpeg', upsert: false });
+          if (error) {
+            alert('Upload échoué : ' + error.message);
+            return;
+          }
+          const { data: urlData } = supabase.storage.from(BUCKET_PHOTOS).getPublicUrl(data.path);
+          const url = urlData.publicUrl;
+          patch({ headerImages: [...(draft.headerImages || []), url] });
+        } catch (err) {
+          console.error(err);
+          alert('Erreur photo : ' + err.message);
+        } finally {
+          setUploading(false);
+          if (e.target) e.target.value = '';
+        }
+      }
+
+      function removePhotoAt(idx) {
+        const newPhotos = (draft.headerImages || []).filter((_, i) => i !== idx);
+        patch({ headerImages: newPhotos });
+      }
+
+      function movePhoto(idx, dir) {
+        const arr = [...(draft.headerImages || [])];
+        const newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= arr.length) return;
+        [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+        patch({ headerImages: arr });
+      }
+
+      const di = formatDate(date);
+
+      return (
+        <div
+          onClick={handleClose}
+          className="fixed inset-0 bg-black/60 flex items-center justify-center p-2 z-50 overflow-y-auto"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-[var(--bg-soft)] text-[var(--text)] rounded-lg shadow-2xl max-w-md w-full max-h-[95vh] overflow-y-auto my-auto border border-[var(--border)]"
+          >
+            <div className="px-5 py-3 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-soft)] z-10">
+              <div className="text-[10px] text-[var(--text-soft)] font-semibold tracking-widest uppercase">
+                {di.dayName} {di.dayNumber} mai
+              </div>
+              <div className="text-base font-medium mt-0.5">Modifier ce jour</div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Status */}
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-2 tracking-wider uppercase">Statut</label>
+                <div className="flex gap-2">
+                  {[
+                    { v: 'pending', label: '🟠 À trancher', color: '#f97316' },
+                    { v: 'validated', label: '🟢 Validé', color: '#10b981' },
+                  ].map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => patch({ status: opt.v })}
+                      className={'flex-1 py-2 rounded text-xs font-medium transition-all ' + (draft.status === opt.v ? 'text-white shadow-md' : 'bg-[var(--bg-hover)] text-[var(--text-soft)]')}
+                      style={draft.status === opt.v ? { backgroundColor: opt.color } : {}}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Emoji + Ville */}
+              <div className="grid grid-cols-[64px_1fr] gap-2">
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-1 tracking-wider uppercase">Emoji</label>
+                  <input
+                    type="text"
+                    value={draft.cityEmoji || ''}
+                    onChange={e => patch({ cityEmoji: e.target.value })}
+                    className="w-full px-2 py-2 border rounded text-center text-lg focus:outline-none"
+                    placeholder="🌊"
+                    maxLength={4}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-1 tracking-wider uppercase">Ville</label>
+                  <input
+                    type="text"
+                    value={draft.city || ''}
+                    onChange={e => patch({ city: e.target.value })}
+                    className="w-full px-3 py-2 border rounded text-sm focus:outline-none"
+                    placeholder="Marseille"
+                  />
+                </div>
+              </div>
+
+              {/* Headline */}
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-1 tracking-wider uppercase">Activité principale</label>
+                <input
+                  type="text"
+                  value={draft.headline || ''}
+                  onChange={e => patch({ headline: e.target.value })}
+                  className="w-full px-3 py-2 border rounded text-sm focus:outline-none"
+                  placeholder="Match OM-Rennes"
+                />
+              </div>
+
+              {/* Sleep */}
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-1 tracking-wider uppercase">🛏️ Hébergement</label>
+                <input
+                  type="text"
+                  value={draft.sleep || ''}
+                  onChange={e => patch({ sleep: e.target.value })}
+                  className="w-full px-3 py-2 border rounded text-sm focus:outline-none"
+                  placeholder="Saint-Raphaël"
+                />
+              </div>
+
+              {/* Photos carrousel */}
+              <div className="border-t border-[var(--border-soft)] pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[10px] font-medium text-[var(--text-soft)] tracking-wider uppercase">
+                    📷 Photos ({(draft.headerImages || []).length})
+                  </label>
+                  <button
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    disabled={uploading}
+                    className="text-[10px] px-2.5 py-1 bg-[var(--bg-hover)] hover:bg-[var(--border)] rounded disabled:opacity-50"
+                  >
+                    {uploading ? 'Upload…' : '+ Ajouter'}
+                  </button>
+                </div>
+
+                {(draft.headerImages || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {(draft.headerImages || []).map((url, idx) => (
+                      <div key={url + idx} className="flex items-center gap-2 p-2 bg-[var(--bg-hover)] rounded">
+                        <div
+                          className="w-14 h-14 rounded bg-cover bg-center flex-shrink-0"
+                          style={{ backgroundImage: `url(${url})` }}
+                        />
+                        <div className="flex-1 text-[10px] text-[var(--text-soft)] truncate">
+                          {idx === 0 ? '⭐ Photo principale' : `Photo ${idx + 1}`}
+                        </div>
+                        <button onClick={() => movePhoto(idx, -1)} disabled={idx === 0} className="text-xs px-1.5 py-1 disabled:opacity-30 hover:bg-[var(--border)] rounded">↑</button>
+                        <button onClick={() => movePhoto(idx, 1)} disabled={idx === (draft.headerImages || []).length - 1} className="text-xs px-1.5 py-1 disabled:opacity-30 hover:bg-[var(--border)] rounded">↓</button>
+                        <button onClick={() => removePhotoAt(idx)} className="text-xs px-2 py-1 text-red-500 hover:bg-red-500/10 rounded">✕</button>
+                      </div>
+                    ))}
+
+                    {/* Réglages photo principale */}
+                    <div className="border-t border-[var(--border-soft)] pt-3 space-y-2">
+                      <div>
+                        <label className="block text-[10px] text-[var(--text-soft)] mb-1">
+                          Zoom photo principale · {((draft.imageZoom || 1) * 100).toFixed(0)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="3"
+                          step="0.05"
+                          value={draft.imageZoom || 1}
+                          onChange={e => patch({ imageZoom: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[var(--text-soft)] mb-1">
+                          Position verticale · {(draft.imageOffsetY || 50).toFixed(0)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={draft.imageOffsetY || 50}
+                          onChange={e => patch({ imageOffsetY: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    disabled={uploading}
+                    className="w-full py-5 border border-dashed border-[var(--border)] rounded text-xs text-[var(--text-soft)] hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                  >
+                    {uploading ? 'Upload en cours…' : '+ Ajouter une photo (compression auto)'}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Couleur header (si pas de photo) */}
+              {(!draft.headerImages || draft.headerImages.length === 0) && (
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-2 tracking-wider uppercase">
+                    Couleur header
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {COLORS_PALETTE.map(p => (
+                      <button
+                        key={p.color}
+                        onClick={() => patch({ headerColor: p.color })}
+                        className={'flex flex-col items-center gap-1 p-1 rounded ' + (draft.headerColor === p.color ? 'ring-2 ring-[var(--accent)]' : '')}
+                        title={p.name}
+                      >
+                        <div className="w-8 h-8 rounded-full" style={{ backgroundColor: p.color }} />
+                        <span className="text-[9px] text-[var(--text-soft)]">{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Activités */}
+              <div className="border-t border-[var(--border-soft)] pt-4">
+                <label className="block text-[10px] font-medium text-[var(--text-soft)] mb-1 tracking-wider uppercase">
+                  Activités / notes
+                </label>
+                <textarea
+                  value={draft.activities || ''}
+                  onChange={e => patch({ activities: e.target.value })}
+                  rows={6}
+                  className="w-full px-3 py-2 border rounded text-sm focus:outline-none resize-y"
+                  placeholder="Trajet, activités…"
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-3 bg-[var(--bg-hover)] border-t border-[var(--border)] flex justify-end gap-2 sticky bottom-0">
+              <button
+                onClick={handleClose}
+                className="px-3 py-1.5 text-sm text-[var(--text-soft)] hover:text-[var(--text)]"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => onSave(draft)}
+                disabled={!dirty}
+                className="px-4 py-1.5 bg-[var(--accent)] text-white rounded hover:opacity-90 text-sm font-medium disabled:opacity-40"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ============================================================
+    // MOUNT
+    // ============================================================
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+
+  <script>
+    // Service Worker registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('[SW] Registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
