@@ -23,7 +23,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <!-- Supabase JS -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@sb/sb-js@2"></script>
 
   <style>
     /* CSS Variables pour les 3 thèmes */
@@ -160,7 +160,7 @@
     const TABLE = 'vacation_planning_2026';
     const BUCKET_PHOTOS = 'vacation-photos';
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       realtime: { params: { eventsPerSecond: 10 } },
     });
 
@@ -319,7 +319,7 @@
       // Initial load + Realtime subscription
       useEffect(() => {
         async function load() {
-          const { data, error } = await supabase
+          const { data, error } = await sb
             .from(TABLE)
             .select('date, data, updated_at');
           if (error) {
@@ -339,7 +339,7 @@
         }
         load();
 
-        const channel = supabase
+        const channel = sb
           .channel('vacation-changes')
           .on('postgres_changes', {
             event: '*',
@@ -365,7 +365,7 @@
           })
           .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => { sb.removeChannel(channel); };
       }, []);
 
       // Auto-scroll to today on mount
@@ -392,7 +392,7 @@
         // Optimistic update
         setDays(prev => ({ ...prev, [date]: { ...newData, _updated_at: new Date().toISOString() } }));
         const { _updated_at, ...cleanData } = newData;
-        const { error } = await supabase
+        const { error } = await sb
           .from(TABLE)
           .upsert({ date, data: cleanData });
         if (error) {
@@ -719,14 +719,14 @@
           }
           const ext = 'jpg';
           const filename = `${date}-${Date.now()}.${ext}`;
-          const { data, error } = await supabase.storage
+          const { data, error } = await sb.storage
             .from(BUCKET_PHOTOS)
             .upload(filename, toUpload, { contentType: 'image/jpeg', upsert: false });
           if (error) {
             alert('Upload échoué : ' + error.message);
             return;
           }
-          const { data: urlData } = supabase.storage.from(BUCKET_PHOTOS).getPublicUrl(data.path);
+          const { data: urlData } = sb.storage.from(BUCKET_PHOTOS).getPublicUrl(data.path);
           const url = urlData.publicUrl;
           patch({ headerImages: [...(draft.headerImages || []), url] });
         } catch (err) {
