@@ -23,7 +23,8 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <!-- Supabase JS -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     /* CSS Variables pour les 3 thèmes */
@@ -159,6 +160,12 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_EfV26KCNGB-JOJxZgOJKIw_RLZdk_mk';
     const TABLE = 'vacation_planning_2026';
     const BUCKET_PHOTOS = 'vacation-photos';
+
+    // Vérification que le SDK Supabase est bien chargé
+    if (!window.supabase || !window.supabase.createClient) {
+      document.body.innerHTML = '<div style="padding:2rem;font-family:sans-serif;max-width:500px;margin:5vh auto"><h2>⚠️ SDK Supabase non chargé</h2><p>Possibles causes :</p><ul><li>Connexion internet coupée</li><li>CDN unpkg/jsdelivr bloqué (firewall, AdBlock)</li><li>Cache navigateur corrompu</li></ul><p>Solutions : <strong>Ctrl+Shift+R</strong> ou désactive ton bloqueur de pubs sur ce domaine.</p></div>';
+      throw new Error('Supabase SDK not loaded');
+    }
 
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       realtime: { params: { eventsPerSecond: 10 } },
